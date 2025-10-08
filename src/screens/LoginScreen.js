@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, 
-  StyleSheet, Alert, KeyboardAvoidingView, Platform 
+  StyleSheet, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Image
 } from 'react-native';
-import { loginUser } from '../services/authService';
+import { loginUser, signInWithGoogle } from '../services/authService';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -20,10 +22,18 @@ const LoginScreen = ({ navigation }) => {
     const result = await loginUser(email, password);
     setLoading(false);
 
-    if (result.success) {
-      // Navigation handled by App.js auth state listener
-    } else {
+    if (!result.success) {
       Alert.alert('Login Failed', result.error);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    const result = await signInWithGoogle();
+    setGoogleLoading(false);
+
+    if (!result.success) {
+      Alert.alert('Google Sign-In Failed', result.error);
     }
   };
 
@@ -43,6 +53,7 @@ const LoginScreen = ({ navigation }) => {
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          editable={!loading && !googleLoading}
         />
         
         <TextInput
@@ -51,21 +62,49 @@ const LoginScreen = ({ navigation }) => {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          editable={!loading && !googleLoading}
         />
         
         <TouchableOpacity 
-          style={styles.button}
+          style={[styles.button, (loading || googleLoading) && styles.buttonDisabled]}
           onPress={handleLogin}
-          disabled={loading}
+          disabled={loading || googleLoading}
         >
-          <Text style={styles.buttonText}>
-            {loading ? 'Logging in...' : 'Login'}
-          </Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Login</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.dividerContainer}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.divider} />
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.googleButton, (loading || googleLoading) && styles.buttonDisabled]}
+          onPress={handleGoogleSignIn}
+          disabled={loading || googleLoading}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color="#4285F4" />
+          ) : (
+            <>
+              <Image
+                source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+                style={styles.googleIcon}
+              />
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </>
+          )}
         </TouchableOpacity>
         
         <TouchableOpacity 
           onPress={() => navigation.navigate('Register')}
           style={styles.linkButton}
+          disabled={loading || googleLoading}
         >
           <Text style={styles.linkText}>
             Don't have an account? Register
@@ -89,7 +128,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#2e7d32',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -109,23 +148,68 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
   button: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#2e7d32',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#ddd',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#666',
+    fontSize: 14,
+  },
+  googleButton: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   linkButton: {
-    marginTop: 16,
+    marginTop: 24,
     alignItems: 'center',
   },
   linkText: {
-    color: '#4A90E2',
+    color: '#2e7d32',
     fontSize: 14,
   },
 });
