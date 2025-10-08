@@ -1,20 +1,29 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import AppNavigator from './src/navigation/AppNavigator';
+import { AuthProvider } from './src/services/authService';
+import { registerForPushNotificationsAsync, scheduleDailyReminders } from './src/services/notificationService';
+import { Platform } from 'react-native';
 
 export default function App() {
+  useEffect(() => {
+    setupNotifications();
+  }, []);
+
+  const setupNotifications = async () => {
+    // Only setup notifications on mobile platforms
+    if (Platform.OS !== 'web') {
+      try {
+        await registerForPushNotificationsAsync();
+        await scheduleDailyReminders();
+      } catch (error) {
+        console.log('Notification setup error:', error);
+      }
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <AuthProvider>
+      <AppNavigator />
+    </AuthProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
