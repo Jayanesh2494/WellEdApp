@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { 
-  View, Text, ScrollView, StyleSheet, 
-  TouchableOpacity, Alert 
+  View, Text, StyleSheet, FlatList, ActivityIndicator,
+  TouchableOpacity, RefreshControl 
 } from 'react-native';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase.config';
+import { AuthContext } from '../context/AuthContext';
+import { getAllTeachers } from '../services/taskService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const AdminDashboardScreen = () => {
+export default function AdminDashboardScreen() {
+  const { user } = useContext(AuthContext);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState({ totalTeachers: 0, activeToday: 0, totalStreaks: 0 });
 
   useEffect(() => {
     loadTeachers();
@@ -16,174 +20,354 @@ const AdminDashboardScreen = () => {
 
   const loadTeachers = async () => {
     try {
-      const usersCollection = collection(db, 'users');
-      const userSnapshot = await getDocs(usersCollection);
-      const teachersList = [];
+      const teacherData = await getAllTeachers();
       
-      userSnapshot.forEach(doc => {
-        const data = doc.data();
-        if (!data.isAdmin) {
-          teachersList.push({
-            id: doc.id,
-            ...data
-          });
-        }
+      const activeCount = teacherData.filter(t => t.completedToday).length;
+      const totalStreakCount = teacherData.reduce((sum, t) => sum + (t.currentStreak || 0), 0);
+      
+      teacherData.sort((a, b) => (b.currentStreak || 0) - (a.currentStreak || 0));
+      
+      setTeachers(teacherData);
+      setStats({
+        totalTeachers: teacherData.length,
+        activeToday: activeCount,
+        totalStreaks: totalStreakCount
       });
-      
-      setTeachers(teachersList);
-      setLoading(false);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load teachers');
+      console.error('Error loading teachers:', error);
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const exportData = () => {
-    Alert.alert(
-      'Export Data',
-      'Export functionality would generate a CSV or PDF report',
-      [{ text: 'OK' }]
-    );
+  const handleLogout = async () => {
+    const confirmed = window.confirm('Are you sure you want to logout?');
+    
+    if (!confirmed) return;
+    
+    try {
+      console.log('🚪 Admin logging out...');
+      
+      // Clear all storage
+      await AsyncStorage.clear();
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      console.log('✅ Storage cleared');
+      
+      // Redirect to login
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
+      
+    } catch (error) {
+      console.error('Logout error:', error);
+      window.location.href = '/';
+    }
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Admin Dashboard</Text>
-        <TouchableOpacity style={styles.exportButton} onPress={exportData}>
-          <Text style={styles.exportButtonText}>Export Report</Text>
-        </TouchableOpacity>
+  const renderHeader = () => (
+    <View>
+      <View style={styles.summaryContainer}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.dashboardTitle}>Admin Dashboard</Text>
+            <Text style={styles.dashboardSubtitle}>Teacher Overview</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.logoutButton} 
+            onPress={handleLogout}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.statsGrid}>
+          <View style={styles.statBox}>
+            <Text style={styles.statIcon}>👥</Text>
+            <Text style={styles.statNumber}>{stats.totalTeachers}</Text>
+            <Text style={styles.statLabel}>Teachers</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statIcon}>✅</Text>
+            <Text style={styles.statNumber}>{stats.activeToday}</Text>
+            <Text style={styles.statLabel}>Active Today</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statIcon}>🔥</Text>
+            <Text style={styles.statNumber}>{stats.totalStreaks}</Text>
+            <Text style={styles.statLabel}>Total Streaks</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statIcon}>📊</Text>
+            <Text style={styles.statNumber}>
+              {stats.totalTeachers > 0 ? Math.round((stats.activeToday / stats.totalTeachers) * 100) : 0}%
+            </Text>
+            <Text style={styles.statLabel}>Rate</Text>
+          </View>
+        </View>
       </View>
-
-      <ScrollView style={styles.list}>
-        {loading ? (
-          <Text style={styles.loadingText}>Loading...</Text>
-        ) : (
-          teachers.map(teacher => (
-            <View key={teacher.id} style={styles.teacherCard}>
-              <View style={styles.teacherInfo}>
-                <Text style={styles.teacherName}>{teacher.name}</Text>
-                <Text style={styles.teacherEmail}>{teacher.email}</Text>
-              </View>
-              <View style={styles.teacherStats}>
-                <View style={styles.statBadge}>
-                  <Text style={styles.statNumber}>{teacher.streak || 0}</Text>
-                  <Text style={styles.statLabel}>Streak</Text>
-                </View>
-                <View style={styles.statusIndicator}>
-                  <Text style={styles.statusText}>
-                    {teacher.lastCompletionDate === new Date().toISOString().split('T')[0] 
-                      ? '✓' : '○'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+      
+      <Text style={styles.listTitle}>Teacher Leaderboard</Text>
     </View>
   );
-};
+
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyIcon}>👨‍🏫</Text>
+      <Text style={styles.emptyText}>No teachers registered yet</Text>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2e7d32" />
+        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={teachers}
+      renderItem={({ item, index }) => (
+        <View style={styles.teacherCard}>
+          <View style={styles.rankBadge}>
+            <Text style={styles.rankText}>#{index + 1}</Text>
+          </View>
+          <View style={styles.teacherInfo}>
+            <View style={styles.teacherHeader}>
+              <Text style={styles.teacherName}>{item.username}</Text>
+              {item.completedToday && (
+                <View style={styles.completedBadge}>
+                  <Text style={styles.completedText}>✓</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.teacherEmail}>{item.email}</Text>
+            <View style={styles.streakRow}>
+              <Text style={styles.streakLabel}>Current: {item.currentStreak || 0} days</Text>
+              <Text style={styles.streakLabel}>• Best: {item.longestStreak || 0} days</Text>
+            </View>
+          </View>
+          <View style={styles.streakInfo}>
+            <Text style={styles.fireIcon}>🔥</Text>
+            <Text style={styles.streakNumber}>{item.currentStreak || 0}</Text>
+          </View>
+        </View>
+      )}
+      keyExtractor={item => item.id}
+      ListHeaderComponent={renderHeader}
+      ListEmptyComponent={renderEmpty}
+      refreshControl={
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={() => { 
+            setRefreshing(true); 
+            loadTeachers(); 
+          }} 
+          colors={['#2e7d32']}
+          tintColor="#2e7d32"
+        />
+      }
+      style={styles.container}
+      contentContainerStyle={teachers.length === 0 ? styles.emptyListContainer : null}
+    />
+  );
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  container: { 
+    flex: 1, 
+    backgroundColor: '#f5f5f5' 
   },
-  header: {
-    backgroundColor: '#4A90E2',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 16,
-  },
-  exportButton: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
     alignItems: 'center',
-  },
-  exportButtonText: {
-    color: '#4A90E2',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  list: {
-    flex: 1,
-    padding: 24,
+    backgroundColor: '#f5f5f5'
   },
   loadingText: {
-    textAlign: 'center',
+    marginTop: 12,
     fontSize: 16,
     color: '#666',
-    marginTop: 32,
   },
-  teacherCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  summaryContainer: { 
+    backgroundColor: '#2e7d32', 
+    padding: 20 
+  },
+  headerRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 20,
+    alignItems: 'flex-start'
+  },
+  dashboardTitle: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: '#fff' 
+  },
+  dashboardSubtitle: { 
+    fontSize: 14, 
+    color: '#e8f5e9', 
+    marginTop: 4 
+  },
+  logoutButton: { 
+    backgroundColor: 'rgba(244, 67, 54, 0.9)',
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  logoutText: { 
+    color: '#fff', 
+    fontSize: 14, 
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  statsGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'space-between' 
+  },
+  statBox: { 
+    width: '48%', 
+    backgroundColor: 'rgba(255,255,255,0.15)', 
+    padding: 16, 
+    borderRadius: 12, 
+    alignItems: 'center', 
+    marginBottom: 12 
+  },
+  statIcon: { 
+    fontSize: 28, 
+    marginBottom: 8 
+  },
+  statNumber: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: '#fff' 
+  },
+  statLabel: { 
+    fontSize: 12, 
+    color: '#e8f5e9',
+    textAlign: 'center'
+  },
+  listTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    padding: 20, 
+    paddingBottom: 12,
+    color: '#333'
+  },
+  teacherCard: { 
+    backgroundColor: '#fff', 
+    borderRadius: 12, 
+    padding: 16, 
+    marginHorizontal: 16, 
+    marginBottom: 12, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  teacherInfo: {
-    flex: 1,
+  rankBadge: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#f5f5f5', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 12 
   },
-  teacherName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+  rankText: { 
+    fontSize: 14, 
+    fontWeight: 'bold', 
+    color: '#666' 
   },
-  teacherEmail: {
-    fontSize: 14,
-    color: '#666',
+  teacherInfo: { 
+    flex: 1 
   },
-  teacherStats: {
+  teacherHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4
   },
-  statBadge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginRight: 12,
-    alignItems: 'center',
+  teacherName: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    marginRight: 8,
+    color: '#333'
   },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A90E2',
+  completedBadge: {
+    backgroundColor: '#4caf50',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center'
   },
-  statLabel: {
+  completedText: {
+    color: '#fff',
     fontSize: 12,
-    color: '#666',
+    fontWeight: 'bold'
   },
-  statusIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
+  teacherEmail: { 
+    fontSize: 13, 
+    color: '#666',
+    marginBottom: 6
+  },
+  streakRow: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  streakLabel: {
+    fontSize: 12,
+    color: '#999'
+  },
+  streakInfo: { 
+    backgroundColor: '#fff3e0', 
+    padding: 12, 
+    borderRadius: 12, 
+    minWidth: 60, 
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ff9800'
+  },
+  fireIcon: {
+    fontSize: 24,
+    marginBottom: 4
+  },
+  streakNumber: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#ff5722' 
+  },
+  emptyListContainer: {
+    flexGrow: 1
+  },
+  emptyContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 60
   },
-  statusText: {
-    fontSize: 18,
-    color: '#4CAF50',
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16
   },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center'
+  }
 });
-
-export default AdminDashboardScreen;

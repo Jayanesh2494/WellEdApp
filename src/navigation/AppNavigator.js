@@ -1,6 +1,6 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { AuthContext } from '../services/authService';
+import { AuthContext } from '../context/AuthContext';
 import DrawerNavigator from './DrawerNavigator';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../screens/LoginScreen';
@@ -30,10 +30,7 @@ export default function AppNavigator() {
           <Stack.Screen 
             name="Register" 
             component={RegisterScreen}
-            options={{ 
-              headerShown: true,
-              title: 'Create Account'
-            }}
+            options={{ headerShown: true, title: 'Register' }}
           />
         </Stack.Navigator>
       )}

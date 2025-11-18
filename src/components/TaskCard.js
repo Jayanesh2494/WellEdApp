@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 
 export default function TaskCard({ task, onToggle }) {
   const getCategoryColor = (category) => {
@@ -13,30 +13,67 @@ export default function TaskCard({ task, onToggle }) {
     return colors[category] || '#9e9e9e';
   };
 
+  const getCategoryImage = (category) => {
+    const images = {
+      Diet: require('../../assets/diet.jpg'),
+      Exercise: require('../../assets/exercise.jpg'),
+      Posture: require('../../assets/posture.jpg'),
+      Water: require('../../assets/water.jpg'),
+      Sunlight: require('../../assets/sunlight.jpg'),
+    };
+    return images[category] || images.Diet;
+  };
+
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
+    <TouchableOpacity 
+      style={[
+        styles.card,
+        task.completed && styles.cardCompleted
+      ]}
+      onPress={onToggle}
+      activeOpacity={0.8}
+    >
+      {/* Small Category Image on Left */}
+      <View style={styles.imageContainer}>
+        <Image 
+          source={getCategoryImage(task.category)}
+          style={styles.categoryImage}
+          resizeMode="cover"
+        />
+        {task.completed && (
+          <View style={styles.completedOverlay}>
+            <Text style={styles.checkmarkText}>✓</Text>
+          </View>
+        )}
+      </View>
+      
+      {/* Content on Right */}
+      <View style={styles.cardContent}>
         <View 
           style={[
             styles.categoryBadge, 
             { backgroundColor: getCategoryColor(task.category) }
           ]}
         >
+          <Text style={styles.categoryIcon}>{task.emoji}</Text>
           <Text style={styles.categoryText}>{task.category}</Text>
         </View>
-        
-        <TouchableOpacity onPress={onToggle}>
-          <View style={[
-            styles.checkbox,
-            task.completed && styles.checkboxChecked
-          ]}>
-            {task.completed && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-        </TouchableOpacity>
-      </View>
 
-      <Text style={styles.instruction}>{task.instruction}</Text>
-    </View>
+        <Text style={[
+          styles.instruction,
+          task.completed && styles.instructionCompleted
+        ]}>
+          {task.instruction}
+        </Text>
+
+        <Text style={[
+          styles.status,
+          task.completed && styles.statusCompleted
+        ]}>
+          {task.completed ? '✓ Done' : 'Tap to complete'}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -44,54 +81,82 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
-    // Fixed: Use boxShadow instead of shadow* props
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    // Keep these for mobile platforms
+    flexDirection: 'row',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
+  cardCompleted: {
+    backgroundColor: '#f5f5f5',
   },
-  categoryBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  imageContainer: {
+    width: 90,
+    height: 90,
+    position: 'relative',
+    backgroundColor: '#e0e0e0',
   },
-  categoryText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
+  categoryImage: {
+    width: '100%',
+    height: '100%',
   },
-  checkbox: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: '#ccc',
+  completedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(46, 125, 50, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkboxChecked: {
-    backgroundColor: '#2e7d32',
-    borderColor: '#2e7d32',
-  },
-  checkmark: {
+  checkmarkText: {
+    fontSize: 32,
     color: '#fff',
-    fontSize: 18,
     fontWeight: 'bold',
   },
+  cardContent: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  categoryIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  categoryText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 11,
+  },
   instruction: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#333',
-    lineHeight: 22,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  instructionCompleted: {
+    color: '#999',
+    textDecorationLine: 'line-through',
+  },
+  status: {
+    fontSize: 12,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  statusCompleted: {
+    color: '#4caf50',
   },
 });

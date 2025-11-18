@@ -1,130 +1,196 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { 
-  View, Text, ScrollView, TouchableOpacity, 
-  StyleSheet, Alert, RefreshControl 
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, 
+  ActivityIndicator 
 } from 'react-native';
-import { auth } from '../../firebase.config';
+import { AuthContext } from '../context/AuthContext';
 import { getDailyTasks, updateTaskCompletion, markAllTasksCompleted } from '../services/taskService';
-import { getCurrentUserData } from '../services/authService';
 import TaskCard from '../components/TaskCard';
+import { notifyTaskComplete, notifyAllTasksComplete } from '../services/notificationService';
+
 
 const HomeScreen = () => {
+  const { user } = useContext(AuthContext);
   const [tasks, setTasks] = useState([]);
-  const [userData, setUserData] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [allCompleted, setAllCompleted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user) {
+      loadTasks();
+    }
+  }, [user]);
 
-  const loadData = async () => {
-    const userId = auth.currentUser?.uid;
-    if (userId) {
-      const [userTasks, userInfo] = await Promise.all([
-        getDailyTasks(userId),
-        getCurrentUserData(userId)
-      ]);
-      setTasks(userTasks);
-      setUserData(userInfo);
+  const loadTasks = async () => {
+    try {
+      const dailyTasks = await getDailyTasks();
+      setTasks(dailyTasks);
+      
+      const completed = dailyTasks.every(task => task.completed);
+      setAllCompleted(completed);
+    } catch (error) {
+      console.error('❌ Error loading tasks:', error);
+      setErrorMessage('Failed to load tasks. Please refresh.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  };
-
-  const handleToggleTask = async (taskId, completed) => {
-    const userId = auth.currentUser?.uid;
-    if (userId) {
-      const updatedTasks = await updateTaskCompletion(userId, taskId, completed);
-      if (updatedTasks) {
-        setTasks(updatedTasks);
+  const handleTaskToggle = async (taskId, completed) => {
+  try {
+    const updatedTasks = await updateTaskCompletion(taskId, !completed);
+    if (updatedTasks) {
+      setTasks(updatedTasks);
+      const allDone = updatedTasks.every(task => task.completed);
+      setAllCompleted(allDone);
+      
+      // Notify on task complete
+      if (!completed) {
+        await notifyTaskComplete();
       }
     }
-  };
+  } catch (error) {
+    console.error('❌ Error toggling task:', error);
+  }
+};
+
 
   const handleMarkAllCompleted = async () => {
-    const allCompleted = tasks.every(task => task.completed);
-    
-    if (allCompleted) {
-      Alert.alert('Info', 'All tasks are already completed!');
-      return;
-    }
+  if (!allCompleted) {
+    setErrorMessage('⚠️ Please complete all tasks first');
+    setTimeout(() => setErrorMessage(''), 3000);
+    return;
+  }
 
-    Alert.alert(
-      'Complete All Tasks',
-      'Mark all tasks as completed for today?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Complete',
-          onPress: async () => {
-            const userId = auth.currentUser?.uid;
-            if (userId) {
-              const completed = await markAllTasksCompleted(userId);
-              if (completed) {
-                setTasks(completed);
-                await loadData();
-                Alert.alert('Success', 'All tasks completed! Streak updated.');
-              }
-            }
-          }
-        }
-      ]
+  try {
+    const result = await markAllTasksCompleted();
+    
+    if (result && result.success) {
+      setSuccessMessage(`🎉 Amazing! All tasks completed!\n🔥 Streak: ${result.streak} ${result.streak === 1 ? 'day' : 'days'}`);
+      
+      // Send celebration notification
+      await notifyAllTasksComplete(result.streak);
+      
+      setTimeout(() => {
+        setSuccessMessage('');
+        loadTasks();
+      }, 3000);
+    }
+  } catch (error) {
+    console.error('❌ Error:', error);
+  }
+};
+
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2e7d32" />
+        <Text style={styles.loadingText}>Loading your daily tasks...</Text>
+      </View>
     );
-  };
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Please login</Text>
+      </View>
+    );
+  }
 
   const completedCount = tasks.filter(task => task.completed).length;
-  const totalTasks = tasks.length;
+  const totalCount = tasks.length;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Hello, {userData?.name || 'Teacher'}!</Text>
+      <View style={styles.welcomeHeader}>
+        <Text style={styles.welcomeText}>Welcome back,</Text>
+        <Text style={styles.nameText}>{user.username}!</Text>
+        
         <View style={styles.streakContainer}>
-          <Text style={styles.streakNumber}>{userData?.streak || 0}</Text>
-          <Text style={styles.streakLabel}>Day Streak 🔥</Text>
+          <Text style={styles.streakEmoji}>🔥</Text>
+          <View>
+            <Text style={styles.streakNumber}>{user.currentStreak || 0}</Text>
+            <Text style={styles.streakLabel}>Day Streak</Text>
+          </View>
         </View>
       </View>
 
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>
-          {completedCount} of {totalTasks} tasks completed
-        </Text>
-        <View style={styles.progressBar}>
+      <View style={styles.progressSection}>
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressTitle}>Today's Progress</Text>
+          <Text style={styles.progressCount}>{completedCount}/{totalCount}</Text>
+        </View>
+        <View style={styles.progressBarContainer}>
           <View 
             style={[
-              styles.progressFill, 
-              { width: `${(completedCount / totalTasks) * 100}%` }
+              styles.progressBarFill, 
+              { width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }
             ]} 
           />
         </View>
       </View>
 
-      <ScrollView
-        style={styles.taskList}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <Text style={styles.sectionTitle}>Today's Wellness Tasks</Text>
-        {tasks.map(task => (
-          <TaskCard 
-            key={task.id} 
-            task={task} 
-            onToggle={handleToggleTask}
-          />
-        ))}
-      </ScrollView>
+      {/* Success Message Banner */}
+      {successMessage ? (
+        <View style={styles.successBanner}>
+          <Text style={styles.successBannerText}>{successMessage}</Text>
+        </View>
+      ) : null}
 
-      <TouchableOpacity 
-        style={styles.completeButton}
-        onPress={handleMarkAllCompleted}
-      >
-        <Text style={styles.completeButtonText}>Mark All Tasks Completed</Text>
-      </TouchableOpacity>
+      {/* Error Message Banner */}
+      {errorMessage ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{errorMessage}</Text>
+        </View>
+      ) : null}
+
+      <ScrollView style={styles.scrollView}>
+        <Text style={styles.header}>Today's Wellness Tasks</Text>
+        
+        {tasks.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>📋</Text>
+            <Text style={styles.emptyText}>No tasks for today</Text>
+          </View>
+        ) : (
+          tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onToggle={() => handleTaskToggle(task.id, task.completed)}
+            />
+          ))
+        )}
+
+        <TouchableOpacity 
+          style={[
+            styles.completeButton,
+            !allCompleted && styles.completeButtonDisabled
+          ]}
+          onPress={handleMarkAllCompleted}
+          disabled={!allCompleted}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.completeButtonText}>
+            {allCompleted ? '✓ Mark All Tasks Completed' : 'Complete All Tasks First'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.motivationCard}>
+          <Text style={styles.motivationEmoji}>💪</Text>
+          <Text style={styles.motivationText}>
+            {allCompleted 
+              ? "Great job! Click the button above to complete today's wellness goals!"
+              : `${totalCount - completedCount} task${totalCount - completedCount === 1 ? '' : 's'} remaining. You've got this!`
+            }
+          </Text>
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -134,73 +200,180 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  header: {
-    backgroundColor: '#4A90E2',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
-  greeting: {
-    fontSize: 24,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  welcomeHeader: {
+    backgroundColor: '#2e7d32',
+    padding: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  welcomeText: {
+    fontSize: 16,
+    color: '#e8f5e9',
+  },
+  nameText: {
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 16,
+    marginTop: 4,
   },
   streakContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    padding: 12,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  streakEmoji: {
+    fontSize: 32,
+    marginRight: 12,
   },
   streakNumber: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginRight: 8,
   },
   streakLabel: {
+    fontSize: 12,
+    color: '#e8f5e9',
+  },
+  progressSection: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressTitle: {
     fontSize: 16,
-    color: '#fff',
+    fontWeight: '600',
+    color: '#333',
   },
-  progressContainer: {
-    padding: 24,
+  progressCount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2e7d32',
   },
-  progressText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  progressBar: {
+  progressBarContainer: {
     height: 8,
     backgroundColor: '#e0e0e0',
     borderRadius: 4,
     overflow: 'hidden',
   },
-  progressFill: {
+  progressBarFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#2e7d32',
     borderRadius: 4,
   },
-  taskList: {
-    flex: 1,
-    paddingHorizontal: 24,
+  successBanner: {
+    backgroundColor: '#d4edda',
+    padding: 16,
+    margin: 16,
+    marginTop: 0,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#28a745',
   },
-  sectionTitle: {
-    fontSize: 18,
+  successBannerText: {
+    color: '#155724',
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    textAlign: 'center',
+  },
+  errorBanner: {
+    backgroundColor: '#f8d7da',
+    padding: 16,
+    margin: 16,
+    marginTop: 0,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc3545',
+  },
+  errorBannerText: {
+    color: '#721c24',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  scrollView: {
+    flex: 1,
+    padding: 16,
+  },
+  header: {
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 16,
+    color: '#333',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
   },
   completeButton: {
-    backgroundColor: '#4CAF50',
-    margin: 24,
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: '#2e7d32',
+    padding: 18,
+    borderRadius: 10,
     alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  completeButtonDisabled: {
+    backgroundColor: '#ccc',
   },
   completeButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  motivationCard: {
+    backgroundColor: '#fff3e0',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  motivationEmoji: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  motivationText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#e65100',
+    lineHeight: 20,
   },
 });
 

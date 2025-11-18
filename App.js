@@ -1,8 +1,11 @@
 import React, { useEffect } from 'react';
+import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { AuthProvider } from './src/services/authService';
-import { registerForPushNotificationsAsync, scheduleDailyReminders } from './src/services/notificationService';
 import { Platform } from 'react-native';
+import { 
+  requestNotificationPermissions, 
+  scheduleDailyReminder 
+} from './src/services/notificationService';
 
 export default function App() {
   useEffect(() => {
@@ -10,13 +13,10 @@ export default function App() {
   }, []);
 
   const setupNotifications = async () => {
-    // Only setup notifications on mobile platforms
     if (Platform.OS !== 'web') {
-      try {
-        await registerForPushNotificationsAsync();
-        await scheduleDailyReminders();
-      } catch (error) {
-        console.log('Notification setup error:', error);
+      const hasPermission = await requestNotificationPermissions();
+      if (hasPermission) {
+        await scheduleDailyReminder();
       }
     }
   };

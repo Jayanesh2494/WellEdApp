@@ -1,44 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, 
-  StyleSheet, Alert, KeyboardAvoidingView, Platform, Switch 
+  StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator, ScrollView, Animated
 } from 'react-native';
-import { registerUser } from '../services/authService';
+import { register } from '../services/authService';
+import { AuthContext } from '../context/AuthContext';
 
 const RegisterScreen = ({ navigation }) => {
-  const [name, setName] = useState('');
+  const { login } = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleRegister = async () => {
-    if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+    // Clear previous messages
+    setErrorMessage('');
+    setSuccessMessage('');
 
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+    // Validation
+    if (!email || !password || !confirmPassword || !username) {
+      setErrorMessage('Please fill in all fields');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      setErrorMessage('Password must be at least 6 characters');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match');
       return;
     }
 
     setLoading(true);
-    const result = await registerUser(email, password, name, isAdmin);
-    setLoading(false);
+    const result = await register(email, password, username);
 
     if (result.success) {
-      Alert.alert('Success', 'Account created successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') }
-      ]);
+      setSuccessMessage('✅ Account created! Logging you in...');
+      
+      // Auto login after 1 second
+      setTimeout(() => {
+        login(result.user);
+        // Navigation happens automatically via AuthContext
+      }, 1000);
     } else {
-      Alert.alert('Registration Failed', result.error);
+      setLoading(false);
+      setErrorMessage(result.error);
     }
   };
 
@@ -47,134 +60,169 @@ const RegisterScreen = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <View style={styles.content}>
-        <Text style={styles.title}>Create Account</Text>
-        
-        <TextInput
-          style={styles.input}
-          placeholder="Full Name"
-          value={name}
-          onChangeText={setName}
-        />
-        
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-        
-        <TextInput
-          style={styles.input}
-          placeholder="Confirm Password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-        />
-        
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>Register as Admin</Text>
-          <Switch
-            value={isAdmin}
-            onValueChange={setIsAdmin}
-            trackColor={{ false: '#ddd', true: '#4A90E2' }}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join WellEd today</Text>
+          
+          {/* Success Message */}
+          {successMessage ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>{successMessage}</Text>
+            </View>
+          ) : null}
+
+          {/* Error Message */}
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+          
+          <TextInput
+            style={styles.input}
+            placeholder="Username"
+            value={username}
+            onChangeText={(text) => {
+              setUsername(text);
+              setErrorMessage('');
+            }}
+            autoCapitalize="words"
+            editable={!loading}
           />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            value={email}
+            onChangeText={(text) => {
+              setEmail(text);
+              setErrorMessage('');
+            }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            editable={!loading}
+          />
+          
+          <TextInput
+            style={styles.input}
+            placeholder="Password (min 6 characters)"
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              setErrorMessage('');
+            }}
+            secureTextEntry
+            editable={!loading}
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              setErrorMessage('');
+            }}
+            secureTextEntry
+            editable={!loading}
+          />
+          
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleRegister}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.loadingText}>Creating account...</Text>
+              </View>
+            ) : (
+              <Text style={styles.buttonText}>Create Account</Text>
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Login')}
+            style={styles.linkButton}
+            disabled={loading}
+          >
+            <Text style={styles.linkText}>
+              Already have an account? <Text style={styles.linkTextBold}>Login</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.button}
-          onPress={handleRegister}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? 'Creating Account...' : 'Register'}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Login')}
-          style={styles.linkButton}
-        >
-          <Text style={styles.linkText}>
-            Already have an account? Login
-          </Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  input: {
-    backgroundColor: '#fff',
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  scrollContent: { flexGrow: 1 },
+  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  title: { fontSize: 36, fontWeight: 'bold', color: '#2e7d32', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 32 },
+  successBox: {
+    backgroundColor: '#d4edda',
     padding: 16,
     borderRadius: 8,
     marginBottom: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#28a745',
   },
-  switchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  switchLabel: {
-    fontSize: 16,
-    color: '#333',
-  },
-  button: {
-    backgroundColor: '#4A90E2',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
+  successText: {
+    color: '#155724',
+    fontSize: 14,
     fontWeight: '600',
   },
-  linkButton: {
-    marginTop: 16,
-    alignItems: 'center',
+  errorBox: {
+    backgroundColor: '#f8d7da',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc3545',
   },
-  linkText: {
-    color: '#4A90E2',
+  errorText: {
+    color: '#721c24',
     fontSize: 14,
+    fontWeight: '600',
   },
+  input: { 
+    backgroundColor: '#fff', 
+    padding: 16, 
+    borderRadius: 8, 
+    marginBottom: 16, 
+    fontSize: 16, 
+    borderWidth: 1, 
+    borderColor: '#ddd' 
+  },
+  button: { 
+    backgroundColor: '#2e7d32', 
+    padding: 16, 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    marginTop: 8,
+    elevation: 2,
+  },
+  buttonDisabled: { opacity: 0.7 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  linkButton: { marginTop: 24, alignItems: 'center' },
+  linkText: { color: '#666', fontSize: 14 },
+  linkTextBold: { color: '#2e7d32', fontWeight: '600' },
 });
 
 export default RegisterScreen;

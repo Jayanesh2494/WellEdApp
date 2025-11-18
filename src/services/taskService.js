@@ -1,125 +1,84 @@
-import { doc, setDoc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase.config';
-import { getRandomTasks } from '../data/taskBank';
+import api from './api';
 
-export const getDailyTasks = async (userId) => {
+export const getDailyTasks = async () => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const taskDocRef = doc(db, 'userTasks', `${userId}_${today}`);
-    const taskDoc = await getDoc(taskDocRef);
+    console.log('📡 Fetching daily tasks from backend...');
+    const response = await api.get('/tasks/daily');
     
-    if (taskDoc.exists()) {
-      return taskDoc.data().tasks;
-    } else {
-      const newTasks = getRandomTasks();
-      await setDoc(taskDocRef, {
-        userId,
-        date: today,
-        tasks: newTasks,
-        allCompleted: false
-      });
-      return newTasks;
+    if (response.data.success) {
+      console.log('✅ Tasks received:', response.data.tasks);
+      return response.data.tasks;
     }
+    return [];
   } catch (error) {
-    console.error('Error getting tasks:', error);
+    console.error('❌ Error fetching tasks:', error.response?.data || error.message);
     return [];
   }
 };
 
-export const updateTaskCompletion = async (userId, taskId, completed) => {
+export const updateTaskCompletion = async (taskId, completed) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const taskDocRef = doc(db, 'userTasks', `${userId}_${today}`);
-    const taskDoc = await getDoc(taskDocRef);
+    console.log(`📝 Updating task ${taskId} to ${completed}`);
+    const response = await api.put(`/tasks/daily/${taskId}`, { completed });
     
-    if (taskDoc.exists()) {
-      const tasks = taskDoc.data().tasks;
-      const updatedTasks = tasks.map(task => 
-        task.id === taskId ? { ...task, completed } : task
-      );
-      
-      await updateDoc(taskDocRef, { tasks: updatedTasks });
-      return updatedTasks;
+    if (response.data.success) {
+      console.log('✅ Task updated successfully');
+      return response.data.tasks;
     }
+    return null;
   } catch (error) {
-    console.error('Error updating task:', error);
+    console.error('❌ Error updating task:', error.response?.data || error.message);
     return null;
   }
 };
 
-export const markAllTasksCompleted = async (userId) => {
+export const markAllTasksCompleted = async () => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const taskDocRef = doc(db, 'userTasks', `${userId}_${today}`);
-    const taskDoc = await getDoc(taskDocRef);
+    console.log('🎯 Marking all tasks as completed...');
+    const response = await api.post('/tasks/complete');
     
-    if (taskDoc.exists()) {
-      const tasks = taskDoc.data().tasks.map(task => ({ ...task, completed: true }));
-      await updateDoc(taskDocRef, { 
-        tasks, 
-        allCompleted: true 
+    if (response.data.success) {
+      console.log('✅ All tasks marked complete! Streak:', response.data.streak);
+      return { success: true, streak: response.data.streak };
+    }
+    return { success: false };
+  } catch (error) {
+    console.error('❌ Error marking complete:', error.response?.data || error.message);
+    return { success: false, message: error.response?.data?.error };
+  }
+};
+
+export const getTaskHistory = async () => {
+  try {
+    const response = await api.get('/tasks/history');
+    
+    if (response.data.success) {
+      const history = {};
+      response.data.history.forEach(task => {
+        history[task.date] = {
+          allCompleted: task.allCompleted,
+          tasks: task.tasks
+        };
       });
-      
-      await updateUserStreak(userId);
-      return tasks;
+      return history;
     }
-  } catch (error) {
-    console.error('Error marking all tasks:', error);
-    return null;
-  }
-};
-
-const updateUserStreak = async (userId) => {
-  try {
-    const userDocRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userDocRef);
-    const userData = userDoc.data();
-    
-    const today = new Date().toISOString().split('T')[0];
-    const lastDate = userData.lastCompletionDate;
-    
-    let newStreak = userData.streak || 0;
-    
-    if (!lastDate) {
-      newStreak = 1;
-    } else {
-      const lastDateObj = new Date(lastDate);
-      const todayObj = new Date(today);
-      const diffTime = Math.abs(todayObj - lastDateObj);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 1) {
-        newStreak += 1;
-      } else if (diffDays > 1) {
-        newStreak = 1;
-      }
-    }
-    
-    await updateDoc(userDocRef, {
-      streak: newStreak,
-      lastCompletionDate: today
-    });
-  } catch (error) {
-    console.error('Error updating streak:', error);
-  }
-};
-
-export const getUserHistory = async (userId) => {
-  try {
-    const tasksCollection = collection(db, 'userTasks');
-    const querySnapshot = await getDocs(tasksCollection);
-    const history = {};
-    
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.userId === userId) {
-        history[data.date] = data.allCompleted;
-      }
-    });
-    
-    return history;
-  } catch (error) {
-    console.error('Error fetching history:', error);
     return {};
+  } catch (error) {
+    console.error('❌ Error fetching history:', error.response?.data || error.message);
+    return {};
+  }
+};
+
+export const getAllTeachers = async () => {
+  try {
+    const response = await api.get('/tasks/admin/teachers');
+    
+    if (response.data.success) {
+      return response.data.teachers;
+    }
+    return [];
+  } catch (error) {
+    console.error('❌ Error fetching teachers:', error.response?.data || error.message);
+    return [];
   }
 };
