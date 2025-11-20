@@ -6,8 +6,18 @@ import {
 import { AuthContext } from '../context/AuthContext';
 import { getDailyTasks, updateTaskCompletion, markAllTasksCompleted } from '../services/taskService';
 import TaskCard from '../components/TaskCard';
-import { notifyTaskComplete, notifyAllTasksComplete } from '../services/notificationService';
 
+// Import notifications but handle if they fail
+let notifyTaskComplete = null;
+let notifyAllTasksComplete = null;
+
+try {
+  const notifications = require('../services/notificationService');
+  notifyTaskComplete = notifications.notifyTaskComplete;
+  notifyAllTasksComplete = notifications.notifyAllTasksComplete;
+} catch (error) {
+  console.log('Notifications not available');
+}
 
 const HomeScreen = () => {
   const { user } = useContext(AuthContext);
@@ -40,23 +50,24 @@ const HomeScreen = () => {
   };
 
   const handleTaskToggle = async (taskId, completed) => {
-  try {
-    const updatedTasks = await updateTaskCompletion(taskId, !completed);
-    if (updatedTasks) {
-      setTasks(updatedTasks);
-      const allDone = updatedTasks.every(task => task.completed);
-      setAllCompleted(allDone);
-      
-      // Notify on task complete
-      if (!completed) {
-        await notifyTaskComplete();
+    try {
+      const updatedTasks = await updateTaskCompletion(taskId, !completed);
+      if (updatedTasks) {
+        setTasks(updatedTasks);
+        const allDone = updatedTasks.every(task => task.completed);
+        setAllCompleted(allDone);
+        
+        // Notify on task complete (if available)
+        if (!completed && notifyTaskComplete) {
+          await notifyTaskComplete();
+        }
       }
+    } catch (error) {
+      console.error('❌ Error toggling task:', error);
+      setErrorMessage('Failed to update task');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
-  } catch (error) {
-    console.error('❌ Error toggling task:', error);
-  }
-};
-
+  };
 
   const handleMarkAllCompleted = async () => {
   if (!allCompleted) {
@@ -66,21 +77,45 @@ const HomeScreen = () => {
   }
 
   try {
+    console.log('🎯 Marking all tasks as complete...');
     const result = await markAllTasksCompleted();
     
+    console.log('📥 Result:', result);
+    
     if (result && result.success) {
-      setSuccessMessage(`🎉 Amazing! All tasks completed!\n🔥 Streak: ${result.streak} ${result.streak === 1 ? 'day' : 'days'}`);
+      // Update user context with new streak
+      const updatedUser = {
+        ...user,
+        currentStreak: result.streak,
+        longestStreak: result.longestStreak || user.longestStreak
+      };
       
-      // Send celebration notification
-      await notifyAllTasksComplete(result.streak);
+      // Update user in context
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       
+      setSuccessMessage(
+        `🎉 Amazing! All tasks completed!\n🔥 Streak: ${result.streak} ${result.streak === 1 ? 'day' : 'days'}\n${result.message || ''}`
+      );
+      
+      // Notify
+      if (notifyAllTasksComplete) {
+        await notifyAllTasksComplete(result.streak);
+      }
+      
+      // Reload after showing message
       setTimeout(() => {
         setSuccessMessage('');
-        loadTasks();
+        // Reload app to show updated streak
+        window.location.reload();
       }, 3000);
+    } else {
+      setErrorMessage(result?.error || result?.message || 'Unable to update streak');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
   } catch (error) {
     console.error('❌ Error:', error);
+    setErrorMessage('Failed to update. Please try again.');
+    setTimeout(() => setErrorMessage(''), 3000);
   }
 };
 
@@ -135,14 +170,12 @@ const HomeScreen = () => {
         </View>
       </View>
 
-      {/* Success Message Banner */}
       {successMessage ? (
         <View style={styles.successBanner}>
           <Text style={styles.successBannerText}>{successMessage}</Text>
         </View>
       ) : null}
 
-      {/* Error Message Banner */}
       {errorMessage ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>{errorMessage}</Text>
@@ -194,6 +227,8 @@ const HomeScreen = () => {
     </View>
   );
 };
+
+
 
 const styles = StyleSheet.create({
   container: {

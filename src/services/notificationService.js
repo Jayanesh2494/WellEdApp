@@ -1,22 +1,43 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Simple notification service WITHOUT hooks
+let Notifications = null;
+
+// Initialize notifications module
+const initNotifications = async () => {
+  if (Platform.OS === 'web') {
+    console.log('⚠️ Notifications not supported on web');
+    return false;
+  }
+
+  try {
+    Notifications = require('expo-notifications').default;
+    
+    // Configure notification behavior
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+    
+    return true;
+  } catch (error) {
+    console.log('⚠️ Notifications module not available:', error.message);
+    return false;
+  }
+};
 
 // Request permissions
 export const requestNotificationPermissions = async () => {
+  if (Platform.OS === 'web') {
+    return false;
+  }
+
   try {
-    if (Platform.OS === 'web') {
-      console.log('⚠️ Push notifications not supported on web');
-      return false;
-    }
+    await initNotifications();
+    if (!Notifications) return false;
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -41,8 +62,13 @@ export const requestNotificationPermissions = async () => {
 
 // Schedule daily reminder
 export const scheduleDailyReminder = async () => {
+  if (Platform.OS === 'web') {
+    return;
+  }
+
   try {
-    if (Platform.OS === 'web') return;
+    await initNotifications();
+    if (!Notifications) return;
 
     // Cancel existing notifications
     await Notifications.cancelAllScheduledNotificationsAsync();
@@ -61,34 +87,6 @@ export const scheduleDailyReminder = async () => {
       },
     });
 
-    // Schedule afternoon reminder (2 PM)
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '💪 Wellness Check!',
-        body: 'How are your daily tasks going? Keep up the great work!',
-        sound: true,
-      },
-      trigger: {
-        hour: 14,
-        minute: 0,
-        repeats: true,
-      },
-    });
-
-    // Schedule evening reminder (6 PM)
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '🎯 Complete Your Day!',
-        body: 'Finish your remaining wellness tasks before the day ends!',
-        sound: true,
-      },
-      trigger: {
-        hour: 18,
-        minute: 0,
-        repeats: true,
-      },
-    });
-
     console.log('✅ Daily reminders scheduled');
   } catch (error) {
     console.error('Error scheduling notifications:', error);
@@ -97,11 +95,14 @@ export const scheduleDailyReminder = async () => {
 
 // Send immediate notification
 export const sendLocalNotification = async (title, body) => {
+  if (Platform.OS === 'web') {
+    console.log(`📢 Notification: ${title} - ${body}`);
+    return;
+  }
+
   try {
-    if (Platform.OS === 'web') {
-      console.log(`Notification: ${title} - ${body}`);
-      return;
-    }
+    await initNotifications();
+    if (!Notifications) return;
 
     await Notifications.scheduleNotificationAsync({
       content: {

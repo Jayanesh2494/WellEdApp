@@ -1,23 +1,22 @@
 import React, { useEffect } from 'react';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { Platform } from 'react-native';
-import { 
-  requestNotificationPermissions, 
-  scheduleDailyReminder 
-} from './src/services/notificationService';
+import { testBackendConnection } from './src/services/api';
 
 export default function App() {
   useEffect(() => {
-    setupNotifications();
+    checkBackendConnection();
   }, []);
 
-  const setupNotifications = async () => {
-    if (Platform.OS !== 'web') {
-      const hasPermission = await requestNotificationPermissions();
-      if (hasPermission) {
-        await scheduleDailyReminder();
-      }
+  const checkBackendConnection = async () => {
+    console.log('🚀 App starting...');
+    const result = await testBackendConnection();
+    
+    if (result.success) {
+      console.log('✅ Backend connected successfully!');
+      console.log('📍 API Status:', result.data);
+    } else {
+      console.error('⚠️ Backend connection issue. App will retry on first action.');
     }
   };
 
