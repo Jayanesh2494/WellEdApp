@@ -9,22 +9,25 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#2e7d32"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.welled"
+      "bundleIdentifier": "com.welled.app"
     },
     "android": {
+      "package": "com.welled.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#2e7d32"
       },
-      "package": "com.yourcompany.welled",
       "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ]
@@ -37,9 +40,14 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#ffffff"
+          "color": "#2e7d32"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dc6b13bf-6852-4cd9-a133-66807bc3e9aa"
+      }
+    }
   }
 }
