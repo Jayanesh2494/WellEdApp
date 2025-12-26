@@ -41,31 +41,58 @@ export default function AdminDashboardScreen() {
     }
   };
 
-  const handleLogout = async () => {
-    const confirmed = window.confirm('Are you sure you want to logout?');
-    
-    if (!confirmed) return;
-    
-    try {
-      console.log('🚪 Admin logging out...');
-      
-      // Clear all storage
-      await AsyncStorage.clear();
+  const handleLogout = async (navigation) => {
+  // Confirm logout only on web
+  const confirmed = typeof window !== 'undefined' ? window.confirm('Are you sure you want to logout?') : true;
+  
+  if (!confirmed) return;
+
+  try {
+    console.log('🚪 Admin logging out...');
+
+    // Clear AsyncStorage on native
+    await AsyncStorage.clear();
+
+    // Clear local and session storage on web
+    if (typeof window !== 'undefined') {
       localStorage.clear();
       sessionStorage.clear();
-      
-      console.log('✅ Storage cleared');
-      
-      // Redirect to login
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 100);
-      
-    } catch (error) {
-      console.error('Logout error:', error);
+
+      // Redirect to login page after clearing
+      window.location.href = '/';
+      return; // Stop here for web
+    }
+
+    // On native, reset navigation stack to Login screen
+    if (navigation) {
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    }
+
+    console.log('✅ Storage cleared and navigation reset!');
+  } catch (error) {
+    console.error('Logout error:', error);
+
+    // Fallback navigation reset on native in case of error
+    if (navigation) {
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    }
+
+    // On web fallback - reload
+    if (typeof window !== 'undefined') {
       window.location.href = '/';
     }
-  };
+  }
+};
 
   const renderHeader = () => (
     <View>

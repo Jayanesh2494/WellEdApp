@@ -1,10 +1,11 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentUser } from '../services/authService';
+import { CommonActions } from '@react-navigation/native';
 
 export const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+export const AuthProvider = ({ children, navigation }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,35 +33,29 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    console.log('=== LOGOUT STARTED ===');
-    
     try {
       await AsyncStorage.clear();
-      console.log('✅ AsyncStorage cleared');
-      
-      if (typeof window !== 'undefined') {
-        localStorage.clear();
-        sessionStorage.clear();
-        console.log('✅ Browser storage cleared');
-      }
-      
       setUser(null);
-      console.log('✅ User state cleared');
-      
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          console.log('🔄 Reloading page...');
-          window.location.href = '/';
-        }
-      }, 100);
-      
+
+      // Reset navigation stack to Login after logout
+      if (navigation) {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
+      }
+
+      // For Web: optional page reload
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
     } catch (error) {
       console.error('Logout error:', error);
-      window.location.href = '/';
     }
   };
 
-  // Add refresh user function
   const refreshUser = async () => {
     try {
       const userData = await getCurrentUser();

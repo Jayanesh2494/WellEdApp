@@ -4,10 +4,10 @@
     "slug": "welled-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#2e7d32"
     },
@@ -22,7 +22,7 @@
       "package": "com.welled.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#2e7d32"
       },
       "permissions": [
@@ -33,7 +33,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo.png"
     },
     "plugins": [
       [
@@ -46,8 +46,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "dc6b13bf-6852-4cd9-a133-66807bc3e9aa"
+        "projectId": "1ec7516e-78c2-4554-93a0-c0b2e8d0ad60"
       }
-    }
+    },
+    "owner": "group17cts"
   }
 }

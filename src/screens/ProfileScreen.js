@@ -72,19 +72,11 @@ const ProfileScreen = () => {
         </View>
       </View>
 
-      <TouchableOpacity 
-        style={styles.logoutButton} 
-        onPress={handleLogout}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.logoutText}>🚪 Logout</Text>
-      </TouchableOpacity>
+     <TouchableOpacity onPress={() => logout(navigation)}>
+      <Text>Logout</Text>
+    </TouchableOpacity>
 
-      <View style={styles.sessionInfo}>
-        <Text style={styles.sessionText}>
-          ⏰ Session expires after 5 minutes of inactivity
-        </Text>
-      </View>
+     
     </ScrollView>
   );
 };
